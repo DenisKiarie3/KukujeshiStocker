@@ -1,6 +1,7 @@
 """
 Django settings for config project.
 """
+from datetime import timedelta
 from pathlib import Path
 from decouple import config, Csv
 
@@ -19,6 +20,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "cloudinary_storage",
     "cloudinary",
@@ -59,7 +61,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# Dev default: SQLite. We'll swap to Postgres via env vars in Phase 8.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -84,7 +85,6 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# CORS: explicit origins only, never a wildcard
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:5173", cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
 
@@ -95,7 +95,35 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "DEFAULT_THROTTLE_RATES": {
+        "auth": "5/min",
+    },
 }
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# Name of the httpOnly cookie carrying the refresh token.
+AUTH_COOKIE_NAME = "refresh_token"
+
+# Cross-site cookie behavior differs between local dev (frontend and
+# backend share the registrable domain "localhost", just different ports
+# — SameSite=Lax works fine) and production (frontend on Netlify, backend
+# on Render — genuinely different domains, which requires SameSite=None).
+# Browsers require Secure=True whenever SameSite=None is used, so these
+# two settings are linked — and forcing Secure=True in dev would silently
+# block the cookie, since local dev runs over plain http.
+AUTH_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+AUTH_COOKIE_SECURE = not DEBUG
+
+CSRF_COOKIE_SAMESITE = AUTH_COOKIE_SAMESITE
+CSRF_COOKIE_SECURE = AUTH_COOKIE_SECURE
+CSRF_COOKIE_HTTPONLY = False  # must be JS-readable to send back as X-CSRFToken
 
 # Cloudinary — product image storage
 CLOUDINARY_STORAGE = {
