@@ -9,5 +9,6 @@ export default defineConfig({
     setupFiles: './src/setupTests.js',
     globals: true,
     pool: 'threads',
+    fileParallelism: false,
   },
 })

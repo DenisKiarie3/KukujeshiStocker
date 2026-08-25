@@ -1,24 +1,32 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import App from './App'
+
+vi.mock('./services/apiClient', () => ({
+  default: { get: vi.fn().mockResolvedValue({ data: [] }) },
+}))
+
+function renderApp(initialRoute) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialRoute]}>
+        <App />
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+}
 
 describe('App routing', () => {
   it('renders the home page at /', () => {
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <App />
-      </MemoryRouter>
-    )
+    renderApp('/')
     expect(screen.getByText(/KukujeshiStocker/i)).toBeInTheDocument()
   })
 
   it('renders the login page at /login', () => {
-    render(
-      <MemoryRouter initialEntries={['/login']}>
-        <App />
-      </MemoryRouter>
-    )
+    renderApp('/login')
     expect(screen.getByText(/Login/i)).toBeInTheDocument()
   })
 })
