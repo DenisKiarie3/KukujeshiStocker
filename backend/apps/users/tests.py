@@ -77,6 +77,7 @@ class AuthAPITests(APITestCase):
         response = self.client.post("/api/v1/auth/refresh/", HTTP_X_CSRFTOKEN=csrf_token)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
+        self.assertEqual(response.data["user"]["username"], "authuser1")
 
     def test_refresh_token_cannot_be_reused_after_rotation(self):
         self.client.post("/api/v1/auth/login/", {"username": "authuser1", "password": "StrongPass123!"})

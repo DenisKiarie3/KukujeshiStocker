@@ -75,9 +75,6 @@ class RefreshView(APIView):
         if not raw_token:
             return Response({"detail": "No refresh token cookie present."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # CSRF double-submit check only matters once we know there's an
-        # actual session (a refresh cookie) to protect — see settings.py's
-        # comment on AUTH_COOKIE_SAMESITE for the full reasoning.
         csrf_cookie = request.COOKIES.get(settings.CSRF_COOKIE_NAME)
         csrf_header = request.META.get("HTTP_X_CSRFTOKEN")
         if not csrf_cookie or not csrf_header or csrf_cookie != csrf_header:
@@ -96,7 +93,10 @@ class RefreshView(APIView):
         old_refresh.blacklist()
         new_refresh = RefreshToken.for_user(user)
 
-        response = Response({"access": str(new_refresh.access_token)}, status=status.HTTP_200_OK)
+        response = Response(
+            {"access": str(new_refresh.access_token), "user": UserSerializer(user).data},
+            status=status.HTTP_200_OK,
+        )
         _set_refresh_cookie(response, new_refresh)
         return response
 
