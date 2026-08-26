@@ -51,3 +51,22 @@ class OrderAPITests(APITestCase):
         response = self.client.post(f"/api/v1/orders/{self.order.pk}/pay-cash/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["payment_status"], Order.PaymentStatus.PAID)
+
+class OrderFilterTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="orderfilter1", email="orderfilter1@example.com", password="x")
+        self.store = Store.objects.create(owner=self.owner, name="Order Filter Shop", slug="order-filter-shop")
+        Order.objects.create(store=self.store, channel=Order.Channel.POS, status=Order.Status.COMPLETED)
+        Order.objects.create(store=self.store, channel=Order.Channel.ONLINE, status=Order.Status.PENDING)
+        self.client.force_authenticate(user=self.owner)
+
+    def test_filter_orders_by_channel(self):
+        response = self.client.get("/api/v1/orders/?channel=online")
+        results = response.data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["channel"], "online")
+
+    def test_filter_orders_by_status(self):
+        response = self.client.get("/api/v1/orders/?status=completed")
+        results = response.data["results"]
+        self.assertEqual(len(results), 1)

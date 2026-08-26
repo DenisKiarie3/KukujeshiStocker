@@ -9,6 +9,7 @@ from .permissions import IsStoreOwner
 class StoreViewSet(viewsets.ModelViewSet):
     serializer_class = StoreSerializer
     permission_classes = [permissions.IsAuthenticated, IsStoreOwner]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         # A user sees stores they own OR are staff at — never someone else's.
@@ -24,6 +25,7 @@ class StoreViewSet(viewsets.ModelViewSet):
 class StoreStaffViewSet(viewsets.ModelViewSet):
     serializer_class = StoreStaffSerializer
     permission_classes = [permissions.IsAuthenticated]
+    ordering = ["-added_at"]
 
     def get_queryset(self):
         # Scoped to stores the requesting user owns — you can't view or

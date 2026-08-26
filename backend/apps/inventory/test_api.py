@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 
 from apps.core.models import Store
-from .models import Product, ProductVariant
+from .models import Category, Product, ProductVariant  # Category added
 
 User = get_user_model()
 
@@ -37,3 +37,36 @@ class ProductAPITests(APITestCase):
         self.client.force_authenticate(user=self.other_user)
         response = self.client.get(f"/api/v1/variants/{self.variant.pk}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+class ProductFilterAndPaginationTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="filterowner1", email="filterowner1@example.com", password="x")
+        self.store = Store.objects.create(owner=self.owner, name="Filter Shop", slug="filter-shop")
+        self.category_a = Category.objects.create(store=self.store, name="Drinks")
+        self.category_b = Category.objects.create(store=self.store, name="Snacks")
+        Product.objects.create(store=self.store, category=self.category_a, name="Cola", base_price=Decimal("80.00"))
+        Product.objects.create(store=self.store, category=self.category_b, name="Chips", base_price=Decimal("150.00"))
+        self.client.force_authenticate(user=self.owner)
+
+    def test_filter_products_by_category(self):
+        response = self.client.get(f"/api/v1/products/?category={self.category_a.pk}")
+        results = response.data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "Cola")
+
+    def test_filter_products_by_price_range(self):
+        response = self.client.get("/api/v1/products/?min_price=100")
+        results = response.data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "Chips")
+
+    def test_order_products_by_price_descending(self):
+        response = self.client.get("/api/v1/products/?ordering=-base_price")
+        results = response.data["results"]
+        self.assertEqual(results[0]["name"], "Chips")
+
+    def test_pagination_returns_paginated_shape(self):
+        response = self.client.get("/api/v1/products/")
+        self.assertIn("count", response.data)
+        self.assertIn("results", response.data)
+        self.assertEqual(response.data["count"], 2)

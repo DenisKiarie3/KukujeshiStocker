@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "cloudinary_storage",
     "cloudinary",
+    "django_filters",
     "apps.users",
     "apps.core",
     "apps.inventory",
@@ -98,6 +99,11 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "auth": "5/min",
     },
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.OrderingFilter",
+    ),
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.StandardResultsPagination",
 }
 
 SIMPLE_JWT = {

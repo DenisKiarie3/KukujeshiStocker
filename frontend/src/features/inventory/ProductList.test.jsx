@@ -14,7 +14,7 @@ function renderWithClient(ui) {
 describe('ProductList', () => {
   it('renders products returned by the API', async () => {
     apiClient.get.mockResolvedValueOnce({
-      data: [{ id: 1, name: 'Sugar 2kg', base_price: '250.00', variants: [{ id: 1, sku: 'SUGAR-2KG', stock_quantity: 30 }] }],
+      data: { count: 1, next: null, previous: null, results: [{ id: 1, name: 'Sugar 2kg', base_price: '250.00', variants: [{ id: 1, sku: 'SUGAR-2KG', stock_quantity: 30 }] }] },
     })
 
     renderWithClient(<ProductList />)

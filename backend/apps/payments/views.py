@@ -4,17 +4,15 @@ from rest_framework import viewsets, permissions
 from apps.core.models import Store
 from .models import Payment
 from .serializers import PaymentSerializer
+from .filters import PaymentFilter
 
 
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    Read-only. The only sanctioned way to CREATE a payment is through
-    record_payment() in services.py — right now that's reachable via
-    Order.pay_cash; Paystack's webhook handler (Phase 7) will call it
-    directly. There's no generic POST /payments/ endpoint on purpose.
-    """
     serializer_class = PaymentSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_class = PaymentFilter
+    ordering_fields = ["created_at", "amount"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         user_stores = Store.objects.filter(

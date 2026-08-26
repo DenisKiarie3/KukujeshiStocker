@@ -12,11 +12,15 @@ from apps.payments.services import record_payment
 from .models import Order
 from .serializers import OrderSerializer, AddItemInputSerializer
 from .services import add_item_to_order
+from .filters import OrderFilter
 
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_class = OrderFilter
+    ordering_fields = ["created_at", "total"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         user_stores = Store.objects.filter(

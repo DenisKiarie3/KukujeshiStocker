@@ -23,12 +23,12 @@ class StoreAPITests(APITestCase):
         self.client.force_authenticate(user=self.owner)
         response = self.client.get("/api/v1/stores/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(len(response.data["results"]), 1)
 
     def test_other_user_does_not_see_this_store(self):
         self.client.force_authenticate(user=self.other_user)
         response = self.client.get("/api/v1/stores/")
-        self.assertEqual(len(response.data), 0)
+        self.assertEqual(len(response.data["results"]), 0)
 
     def test_create_store_sets_owner_automatically(self):
         self.client.force_authenticate(user=self.owner)

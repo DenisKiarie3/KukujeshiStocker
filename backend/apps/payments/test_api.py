@@ -22,14 +22,34 @@ class PaymentAPITests(APITestCase):
     def test_owner_can_list_their_store_payments(self):
         self.client.force_authenticate(user=self.owner)
         response = self.client.get("/api/v1/payments/")
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(len(response.data["results"]), 1)
 
     def test_other_user_cannot_see_this_payment(self):
         self.client.force_authenticate(user=self.other_user)
         response = self.client.get("/api/v1/payments/")
-        self.assertEqual(len(response.data), 0)
+        self.assertEqual(len(response.data["results"]), 0)
 
     def test_direct_post_to_payments_is_not_allowed(self):
         self.client.force_authenticate(user=self.owner)
         response = self.client.post("/api/v1/payments/", {"order": self.order.pk, "provider": "cash", "amount": "100.00"})
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+class PaymentFilterTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="payfilter1", email="payfilter1@example.com", password="x")
+        self.store = Store.objects.create(owner=self.owner, name="Pay Filter Shop", slug="pay-filter-shop")
+        order = Order.objects.create(store=self.store, channel=Order.Channel.POS)
+        Payment.objects.create(order=order, provider=Payment.Provider.CASH, amount=Decimal("100.00"), status=Payment.Status.SUCCESS)
+        Payment.objects.create(order=order, provider=Payment.Provider.PAYSTACK, amount=Decimal("200.00"), status=Payment.Status.FAILED)
+        self.client.force_authenticate(user=self.owner)
+
+    def test_filter_payments_by_provider(self):
+        response = self.client.get("/api/v1/payments/?provider=paystack")
+        results = response.data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["provider"], "paystack")
+
+    def test_filter_payments_by_status(self):
+        response = self.client.get("/api/v1/payments/?status=failed")
+        results = response.data["results"]
+        self.assertEqual(len(results), 1)

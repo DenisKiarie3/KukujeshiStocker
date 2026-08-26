@@ -10,7 +10,7 @@ import posReducer from './features/pos/posSlice'
 import App from './App'
 
 vi.mock('./services/apiClient', () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: [] }) },
+  default: { get: vi.fn().mockResolvedValue({ data: { count: 0, next: null, previous: null, results: [] } }) },
   setAccessToken: vi.fn(),
   attachAuthInterceptor: vi.fn(),
   refreshAccessToken: vi.fn().mockRejectedValue({ response: { status: 401 } }),
