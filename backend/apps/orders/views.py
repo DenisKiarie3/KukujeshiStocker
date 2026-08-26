@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db.models import Q
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
@@ -13,6 +14,8 @@ from .models import Order
 from .serializers import OrderSerializer, AddItemInputSerializer
 from .services import add_item_to_order
 from .filters import OrderFilter
+from apps.payments.services import initiate_paystack_payment
+from apps.payments.gateway import PaystackError
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -80,3 +83,27 @@ class OrderViewSet(viewsets.ModelViewSet):
         record_payment(order=order, provider=Payment.Provider.CASH, amount=order.total)
         order.refresh_from_db()
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="pay-online")
+    def pay_online(self, request, pk=None):
+        """
+        Starts a Paystack checkout for this order. Returns the URL the
+        frontend redirects the customer to. Does NOT mark anything paid —
+        that only happens later, via the signature-verified webhook.
+        """
+        order = self.get_object()
+
+        email = request.data.get("email")
+        if not email:
+            return Response({"detail": "Customer email is required for online payment."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.total <= 0:
+            return Response({"detail": "Order has no payable total."}, status=status.HTTP_400_BAD_REQUEST)
+
+        callback_url = f"{settings.FRONTEND_URL}/checkout/callback"
+        try:
+            checkout_url = initiate_paystack_payment(order=order, email=email, callback_url=callback_url)
+        except PaystackError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({"checkout_url": checkout_url}, status=status.HTTP_200_OK)

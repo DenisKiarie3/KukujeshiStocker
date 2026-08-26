@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 from rest_framework import status
+from unittest.mock import patch
 
 from apps.core.models import Store
 from apps.inventory.models import Product, ProductVariant
@@ -51,6 +52,21 @@ class OrderAPITests(APITestCase):
         response = self.client.post(f"/api/v1/orders/{self.order.pk}/pay-cash/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["payment_status"], Order.PaymentStatus.PAID)
+
+    @patch("apps.orders.views.initiate_paystack_payment")
+    def test_pay_online_returns_checkout_url(self, mock_initiate):
+        self.client.post(f"/api/v1/orders/{self.order.pk}/add_item/", {"variant": self.variant.pk, "quantity": 1})
+        mock_initiate.return_value = "https://checkout.paystack.co/redirect-here"
+        response = self.client.post(
+            f"/api/v1/orders/{self.order.pk}/pay-online/", {"email": "buyer@example.com"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["checkout_url"], "https://checkout.paystack.co/redirect-here")
+
+    def test_pay_online_requires_email(self):
+        self.client.post(f"/api/v1/orders/{self.order.pk}/add_item/", {"variant": self.variant.pk, "quantity": 1})
+        response = self.client.post(f"/api/v1/orders/{self.order.pk}/pay-online/", {})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 class OrderFilterTests(APITestCase):
     def setUp(self):
