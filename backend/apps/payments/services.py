@@ -28,16 +28,17 @@ def record_payment(*, order, provider, amount, currency="KES", paystack_referenc
         order.refresh_from_db(fields=["payment_status"])
     return payment
 
+class PaymentNotAllowedError(Exception):
+    """Raised when an order cannot accept a new payment attempt."""
 
 def initiate_paystack_payment(*, order, email, callback_url):
-    """
-    Starts a Paystack transaction for an order and returns the checkout URL
-    the frontend should redirect the customer to. Generates a unique
-    reference we control (rather than letting Paystack generate one), so we
-    can correlate the later webhook back to this exact order.
-    """
+    if order.payment_status == Order.PaymentStatus.PAID:
+        raise PaymentNotAllowedError("This order has already been paid.")
+    if order.status == Order.Status.CANCELLED:
+        raise PaymentNotAllowedError("Cannot pay for a cancelled order.")
+
     reference = f"kjs-{order.pk}-{uuid.uuid4().hex[:12]}"
-    amount_kobo = int(order.total * 100)  # KES -> kobo; Decimal * 100 then int
+    amount_kobo = int(order.total * 100)
 
     result = gateway.initialize_transaction(
         email=email,
@@ -47,9 +48,6 @@ def initiate_paystack_payment(*, order, email, callback_url):
         currency=order.store.currency,
     )
 
-    # Record a PENDING payment now, so a webhook that arrives before any
-    # other bookkeeping has a row to find and flip. The reference is the
-    # correlation key between this row and the eventual webhook.
     Payment.objects.create(
         order=order,
         provider=Payment.Provider.PAYSTACK,

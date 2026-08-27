@@ -6,4 +6,4 @@ from .models import Payment
 class PaymentFilter(django_filters.FilterSet):
     class Meta:
         model = Payment
-        fields = ["provider", "status"]
+        fields = ["provider", "status", "paystack_reference"]

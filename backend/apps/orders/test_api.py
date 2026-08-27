@@ -68,6 +68,20 @@ class OrderAPITests(APITestCase):
         response = self.client.post(f"/api/v1/orders/{self.order.pk}/pay-online/", {})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_cannot_pay_online_for_already_paid_order(self):
+        self.client.post(f"/api/v1/orders/{self.order.pk}/add_item/", {"variant": self.variant.pk, "quantity": 1})
+        self.order.payment_status = Order.PaymentStatus.PAID
+        self.order.save(update_fields=["payment_status"])
+        response = self.client.post(f"/api/v1/orders/{self.order.pk}/pay-online/", {"email": "buyer@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_pay_online_for_cancelled_order(self):
+        self.client.post(f"/api/v1/orders/{self.order.pk}/add_item/", {"variant": self.variant.pk, "quantity": 1})
+        self.order.status = Order.Status.CANCELLED
+        self.order.save(update_fields=["status"])
+        response = self.client.post(f"/api/v1/orders/{self.order.pk}/pay-online/", {"email": "buyer@example.com"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 class OrderFilterTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="orderfilter1", email="orderfilter1@example.com", password="x")

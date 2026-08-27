@@ -112,6 +112,20 @@ class PaystackServiceTests(TestCase):
         result = confirm_paystack_payment(reference="reference-we-never-issued")
         self.assertIsNone(result)
 
+    def test_initiate_rejects_already_paid_order(self):
+        from apps.payments.services import initiate_paystack_payment, PaymentNotAllowedError
+        self.order.payment_status = Order.PaymentStatus.PAID
+        self.order.save(update_fields=["payment_status"])
+        with self.assertRaises(PaymentNotAllowedError):
+            initiate_paystack_payment(order=self.order, email="buyer@example.com", callback_url="http://localhost/cb")
+
+    def test_initiate_rejects_cancelled_order(self):
+        from apps.payments.services import initiate_paystack_payment, PaymentNotAllowedError
+        self.order.status = Order.Status.CANCELLED
+        self.order.save(update_fields=["status"])
+        with self.assertRaises(PaymentNotAllowedError):
+            initiate_paystack_payment(order=self.order, email="buyer@example.com", callback_url="http://localhost/cb")
+
 
 @override_settings(PAYSTACK_SECRET_KEY="sk_test_dummy_secret")
 class PaystackWebhookTests(TestCase):

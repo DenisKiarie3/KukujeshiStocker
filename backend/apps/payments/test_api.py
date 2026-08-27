@@ -39,8 +39,13 @@ class PaymentFilterTests(APITestCase):
         self.owner = User.objects.create_user(username="payfilter1", email="payfilter1@example.com", password="x")
         self.store = Store.objects.create(owner=self.owner, name="Pay Filter Shop", slug="pay-filter-shop")
         order = Order.objects.create(store=self.store, channel=Order.Channel.POS)
-        Payment.objects.create(order=order, provider=Payment.Provider.CASH, amount=Decimal("100.00"), status=Payment.Status.SUCCESS)
-        Payment.objects.create(order=order, provider=Payment.Provider.PAYSTACK, amount=Decimal("200.00"), status=Payment.Status.FAILED)
+        Payment.objects.create(
+            order=order, provider=Payment.Provider.CASH, amount=Decimal("100.00"), status=Payment.Status.SUCCESS
+        )
+        Payment.objects.create(
+            order=order, provider=Payment.Provider.PAYSTACK, amount=Decimal("200.00"),
+            status=Payment.Status.FAILED, paystack_reference="kjs-filter-test-1",
+        )
         self.client.force_authenticate(user=self.owner)
 
     def test_filter_payments_by_provider(self):
@@ -53,3 +58,9 @@ class PaymentFilterTests(APITestCase):
         response = self.client.get("/api/v1/payments/?status=failed")
         results = response.data["results"]
         self.assertEqual(len(results), 1)
+
+    def test_filter_payments_by_reference(self):
+        response = self.client.get("/api/v1/payments/?paystack_reference=kjs-filter-test-1")
+        results = response.data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["paystack_reference"], "kjs-filter-test-1")

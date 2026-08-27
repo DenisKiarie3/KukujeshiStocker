@@ -14,7 +14,7 @@ from .models import Order
 from .serializers import OrderSerializer, AddItemInputSerializer
 from .services import add_item_to_order
 from .filters import OrderFilter
-from apps.payments.services import initiate_paystack_payment
+from apps.payments.services import initiate_paystack_payment, PaymentNotAllowedError
 from apps.payments.gateway import PaystackError
 
 
@@ -103,6 +103,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         callback_url = f"{settings.FRONTEND_URL}/checkout/callback"
         try:
             checkout_url = initiate_paystack_payment(order=order, email=email, callback_url=callback_url)
+        except PaymentNotAllowedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except PaystackError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 

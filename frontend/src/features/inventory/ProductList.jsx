@@ -1,4 +1,5 @@
 import { useProducts } from './useProducts'
+import BuyButton from '../checkout/BuyButton'
 
 function ProductList() {
   const { data: products, isLoading, isError, error } = useProducts()
@@ -32,6 +33,7 @@ function ProductList() {
               {product.variants[0].sku} — {product.variants[0].stock_quantity} in stock
             </p>
           )}
+          <BuyButton product={product} />
         </li>
       ))}
     </ul>
