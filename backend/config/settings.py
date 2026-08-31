@@ -1,8 +1,11 @@
 """
 Django settings for config project.
 """
+import os
 from datetime import timedelta
 from pathlib import Path
+
+import dj_database_url
 from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -10,6 +13,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
+
+# Render assigns a *.onrender.com hostname automatically via this env var —
+# appending it means we never have to manually copy it into ALLOWED_HOSTS.
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -22,9 +31,9 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    "django_filters",
     "cloudinary_storage",
     "cloudinary",
-    "django_filters",
     "apps.users",
     "apps.core",
     "apps.inventory",
@@ -34,6 +43,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -62,15 +72,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
+# DATABASE_URL will be Neon's connection string in production (Step 2).
+# Falls back to local SQLite when unset, so local dev is unaffected.
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-        "OPTIONS": {
-            "timeout": 20,
-        },
-    }
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        ssl_require=not DEBUG,
+    )
 }
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"].setdefault("OPTIONS", {})["timeout"] = 20
 
 AUTH_USER_MODEL = "users.User"
 
@@ -87,6 +99,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:5173", cast=Csv())
@@ -117,22 +131,25 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-# Name of the httpOnly cookie carrying the refresh token.
 AUTH_COOKIE_NAME = "refresh_token"
-
-# Cross-site cookie behavior differs between local dev (frontend and
-# backend share the registrable domain "localhost", just different ports
-# — SameSite=Lax works fine) and production (frontend on Netlify, backend
-# on Render — genuinely different domains, which requires SameSite=None).
-# Browsers require Secure=True whenever SameSite=None is used, so these
-# two settings are linked — and forcing Secure=True in dev would silently
-# block the cookie, since local dev runs over plain http.
 AUTH_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
 AUTH_COOKIE_SECURE = not DEBUG
 
 CSRF_COOKIE_SAMESITE = AUTH_COOKIE_SAMESITE
 CSRF_COOKIE_SECURE = AUTH_COOKIE_SECURE
-CSRF_COOKIE_HTTPONLY = False  # must be JS-readable to send back as X-CSRFToken
+CSRF_COOKIE_HTTPONLY = False
+
+# Production hardening — every setting here is a no-op locally, since
+# DEBUG=True there skips this block entirely.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    # Render (like most PaaS platforms) terminates TLS at its own edge
+    # proxy and forwards plain HTTP internally. Without this, Django can't
+    # tell the original request was HTTPS and redirect-loops forever.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 7  # 1 week to start; raise once confident nothing's broken
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SESSION_COOKIE_SECURE = True
 
 # Cloudinary — product image storage
 CLOUDINARY_STORAGE = {
@@ -140,11 +157,10 @@ CLOUDINARY_STORAGE = {
     "API_KEY": config("CLOUDINARY_API_KEY", default=""),
     "API_SECRET": config("CLOUDINARY_API_SECRET", default=""),
 }
+DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 
 # Paystack
 PAYSTACK_SECRET_KEY = config("PAYSTACK_SECRET_KEY", default="")
 PAYSTACK_PUBLIC_KEY = config("PAYSTACK_PUBLIC_KEY", default="")
 PAYSTACK_BASE_URL = "https://api.paystack.co"
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
-
-DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
