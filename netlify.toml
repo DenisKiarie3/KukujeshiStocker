@@ -3,6 +3,18 @@
   command = "npm run build"
   publish = "dist"
 
+# Proxy all /api/* requests to the Render backend, server-to-server.
+# status=200 makes this a rewrite (not a redirect) — the browser's URL
+# bar never changes, so from the browser's view everything is same-origin.
+# This block MUST come before the SPA catch-all below, since Netlify
+# applies the first matching rule.
+[[redirects]]
+  from = "/api/*"
+  to = "https://kukujeshistocker-backend.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback — must stay last.
 [[redirects]]
   from = "/*"
   to = "/index.html"

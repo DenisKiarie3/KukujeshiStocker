@@ -132,12 +132,27 @@ SIMPLE_JWT = {
 }
 
 AUTH_COOKIE_NAME = "refresh_token"
-AUTH_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+
+# With the Netlify proxy, the browser treats API calls as same-origin
+# (everything is netlify.app), so cookies can use the stricter, safer
+# SameSite=Lax in production rather than None. Locally, DEBUG=True keeps
+# Lax too — same behavior in both environments now.
+AUTH_COOKIE_SAMESITE = "Lax"
 AUTH_COOKIE_SECURE = not DEBUG
 
 CSRF_COOKIE_SAMESITE = AUTH_COOKIE_SAMESITE
 CSRF_COOKIE_SECURE = AUTH_COOKIE_SECURE
-CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_HTTPONLY = False  # must be JS-readable to send back as X-CSRFToken
+
+# Origins Django's CSRF machinery trusts for cookie-authenticated requests.
+# The Netlify proxy forwards the browser's original Origin header, which is
+# the Netlify domain — so it must be listed here, or Django's built-in CSRF
+# middleware rejects proxied POSTs before our own view logic runs.
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    default="http://localhost:5173",
+    cast=Csv(),
+)
 
 # Production hardening — every setting here is a no-op locally, since
 # DEBUG=True there skips this block entirely.
