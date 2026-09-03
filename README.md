@@ -21,4 +21,4 @@ python manage.py runserver
 ```
 
 ## Frontend Setup
-_Coming in Phase 4._test
+_Coming in Phase 4._
