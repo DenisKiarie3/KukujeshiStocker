@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit'
 import authReducer, { setCredentials, logout } from '../features/auth/authSlice'
 import activeStoreReducer from '../features/store/activeStoreSlice'
 import posReducer from '../features/pos/posSlice'
+import storefrontCartReducer from '../features/storefrontCart/storefrontCartSlice'
 import { setAccessToken, attachAuthInterceptor } from '../services/apiClient'
 
 export const store = configureStore({
@@ -9,6 +10,7 @@ export const store = configureStore({
     auth: authReducer,
     activeStore: activeStoreReducer,
     pos: posReducer,
+    storefrontCart: storefrontCartReducer,
   },
 })
 
@@ -21,8 +23,6 @@ store.subscribe(() => {
   }
 })
 
-// Keeps a session alive across an expired access token mid-session,
-// as long as the httpOnly refresh cookie is still valid.
 attachAuthInterceptor({
   onRefreshSuccess: (data) => {
     store.dispatch(setCredentials({ user: data.user, accessToken: data.access }))

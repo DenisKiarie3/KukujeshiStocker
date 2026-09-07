@@ -87,7 +87,7 @@ class StorefrontCheckoutView(APIView):
         if not email:
             return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        callback_url = f"{settings.FRONTEND_URL}/store/{order.store.slug}/checkout/callback"
+        callback_url = f"{settings.FRONTEND_URL}/store/{order.store.slug}/checkout/callback?order={order.public_reference}"
         try:
             checkout_url = initiate_paystack_payment(order=order, email=email, callback_url=callback_url)
         except PaymentNotAllowedError as exc:

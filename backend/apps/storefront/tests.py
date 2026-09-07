@@ -129,6 +129,10 @@ class StorefrontOrderCreationTests(APITestCase):
         response = self.client.post(f"/api/v1/storefront/orders/{ref}/checkout/", {"email": "jane@example.com"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["checkout_url"], "https://checkout.paystack.co/storefront-xyz")
+        # The callback_url must carry the order reference, or the frontend
+        # callback page has no way to know which order to poll.
+        _, kwargs = mock_initiate.call_args
+        self.assertIn(f"order={ref}", kwargs["callback_url"])
 
 class StorefrontOrderStatusTests(APITestCase):
     def setUp(self):
