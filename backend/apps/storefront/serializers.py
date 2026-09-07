@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.orders.models import Order
 
 from apps.inventory.models import Product, ProductVariant
 
@@ -38,3 +39,28 @@ class PublicProductSerializer(serializers.ModelSerializer):
         # Only surface variants that have stock or are otherwise sellable;
         # here we show all variants but the in_stock flag guides the UI.
         return PublicVariantSerializer(obj.variants.all(), many=True).data
+
+class StorefrontOrderItemInputSerializer(serializers.Serializer):
+    variant = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1)
+
+class StorefrontOrderCreateSerializer(serializers.Serializer):
+    """Validates the SHAPE of an anonymous checkout request. Business
+    rules (stock, store ownership) live in services.py, not here."""
+    name = serializers.CharField(max_length=255)
+    email = serializers.EmailField()
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    items = StorefrontOrderItemInputSerializer(many=True)
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("At least one item is required.")
+        return value
+
+class StorefrontOrderStatusSerializer(serializers.ModelSerializer):
+    """What an anonymous buyer is allowed to see about their own order,
+    looked up by public_reference. No internal IDs, no store internals."""
+    class Meta:
+        model = Order
+        fields = ["public_reference", "status", "payment_status", "total", "created_at"]
+        read_only_fields = fields
