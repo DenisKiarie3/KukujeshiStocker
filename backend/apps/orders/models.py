@@ -1,3 +1,4 @@
+import uuid
 from django.conf import settings
 from django.db import models
 
@@ -38,6 +39,11 @@ class Order(models.Model):
         REFUNDED = "refunded", "Refunded"
 
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="orders")
+    public_reference = models.UUIDField(
+        default=uuid.uuid4, editable=False, unique=True, db_index=True,
+        help_text="Unguessable public handle for anonymous order-status lookups — "
+                    "never expose the sequential integer PK to storefront customers.",
+    )
     channel = models.CharField(max_length=10, choices=Channel.choices)
     customer = models.ForeignKey(
         Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name="orders",

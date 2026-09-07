@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.inventory",
     "apps.orders",
     "apps.payments",
+    "apps.storefront",
 ]
 
 MIDDLEWARE = [
@@ -115,6 +116,8 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_THROTTLE_RATES": {
         "auth": "5/min",
+        "storefront_read": "60/min",
+        "storefront_order": "10/min",
     },
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
