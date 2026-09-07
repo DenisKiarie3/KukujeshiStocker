@@ -8,6 +8,7 @@ from apps.core.models import Store
 from apps.inventory.models import Product, ProductVariant, StockMovement
 from apps.inventory.services import record_stock_movement
 from apps.orders.models import Order
+from unittest.mock import patch
 
 User = get_user_model()
 
@@ -119,6 +120,15 @@ class StorefrontOrderCreationTests(APITestCase):
             "/api/v1/storefront/order-store/orders/", self._payload(email="not-an-email"), format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("apps.storefront.views.initiate_paystack_payment")
+    def test_checkout_returns_paystack_url(self, mock_initiate):
+        create_resp = self.client.post("/api/v1/storefront/order-store/orders/", self._payload(), format="json")
+        ref = create_resp.data["public_reference"]
+        mock_initiate.return_value = "https://checkout.paystack.co/storefront-xyz"
+        response = self.client.post(f"/api/v1/storefront/orders/{ref}/checkout/", {"email": "jane@example.com"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["checkout_url"], "https://checkout.paystack.co/storefront-xyz")
 
 class StorefrontOrderStatusTests(APITestCase):
     def setUp(self):

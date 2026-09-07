@@ -11,6 +11,8 @@ from django.test import override_settings
 from apps.core.models import Store
 from apps.orders.models import Order
 from .models import Payment
+from apps.inventory.models import Product, ProductVariant, StockMovement
+from apps.inventory.services import record_stock_movement
 
 from .services import record_payment
 
@@ -125,6 +127,34 @@ class PaystackServiceTests(TestCase):
         self.order.save(update_fields=["status"])
         with self.assertRaises(PaymentNotAllowedError):
             initiate_paystack_payment(order=self.order, email="buyer@example.com", callback_url="http://localhost/cb")
+
+    @patch("apps.payments.services.gateway.verify_transaction")
+    def test_confirm_decrements_stock_once_on_first_success(self, mock_verify):
+        from apps.payments.services import confirm_paystack_payment
+        from apps.orders.models import OrderItem
+        product = Product.objects.create(store=self.order.store, name="Item", base_price=Decimal("250.00"))
+        variant = ProductVariant.objects.create(product=product, sku="CONFIRM-1")
+        record_stock_movement(variant=variant, movement_type=StockMovement.MovementType.PURCHASE, quantity_change=10)
+        OrderItem.objects.create(order=self.order, variant=variant, quantity=3, unit_price=Decimal("250.00"))
+
+        Payment.objects.create(
+            order=self.order, provider=Payment.Provider.PAYSTACK, amount=self.order.total or Decimal("250.00"),
+            status=Payment.Status.PENDING, paystack_reference="kjs-stock-1",
+        )
+        # order.total was 0 at setUp; set it to match the payment for the amount check
+        self.order.total = Decimal("250.00")
+        self.order.save(update_fields=["total"])
+        Payment.objects.filter(paystack_reference="kjs-stock-1").update(amount=Decimal("250.00"))
+        mock_verify.return_value = {"status": "success", "amount": 25000, "reference": "kjs-stock-1"}
+
+        confirm_paystack_payment(reference="kjs-stock-1")
+        variant.refresh_from_db()
+        self.assertEqual(variant.stock_quantity, 7)  # 10 - 3
+
+        # Replay the same webhook — stock must NOT drop again.
+        confirm_paystack_payment(reference="kjs-stock-1")
+        variant.refresh_from_db()
+        self.assertEqual(variant.stock_quantity, 7)
 
 
 @override_settings(PAYSTACK_SECRET_KEY="sk_test_dummy_secret")

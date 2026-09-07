@@ -31,6 +31,7 @@ class Order(models.Model):
         PENDING = "pending", "Pending"
         COMPLETED = "completed", "Completed"
         CANCELLED = "cancelled", "Cancelled"
+        NEEDS_ATTENTION = "needs_attention", "Needs Attention"
 
     class PaymentStatus(models.TextChoices):
         PENDING = "pending", "Pending"

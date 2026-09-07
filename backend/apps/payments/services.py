@@ -7,6 +7,8 @@ from django.utils import timezone
 from .models import Payment
 from . import gateway
 from apps.orders.models import Order
+from apps.inventory.services import record_stock_movement, InsufficientStockError
+from apps.inventory.models import StockMovement
 
 
 @transaction.atomic
@@ -62,35 +64,58 @@ def initiate_paystack_payment(*, order, email, callback_url):
 @transaction.atomic
 def confirm_paystack_payment(*, reference):
     """
-    Called by the webhook handler AFTER the signature has been verified.
-    Independently confirms with Paystack's verify endpoint, checks the
-    amount, and is idempotent — a replayed webhook for an
-    already-successful payment is a no-op, not a double-fulfillment.
+    Called by the webhook handler AFTER signature verification. Independently
+    verifies with Paystack, checks the amount, is idempotent, and — on the
+    genuine first confirmation only — decrements stock for the order's items.
+
+    The stock decrement sits AFTER the idempotency guard, so a replayed
+    webhook (which does happen) never double-decrements: a replay hits the
+    early return before reaching this code.
     """
     try:
         payment = Payment.objects.select_for_update().get(
             paystack_reference=reference, provider=Payment.Provider.PAYSTACK
         )
     except Payment.DoesNotExist:
-        # A reference we never issued — ignore rather than create anything.
         return None
 
-    # Idempotency: if we already marked this successful, stop here.
+    # Idempotency guard — a replayed webhook for an already-successful
+    # payment stops here, before any stock movement.
     if payment.status == Payment.Status.SUCCESS:
         return payment
 
     verified = gateway.verify_transaction(reference=reference)
 
-    # Independent amount check — never trust the webhook's self-report.
     paystack_amount = Decimal(verified["amount"]) / 100
     if verified.get("status") != "success" or paystack_amount != payment.amount:
         payment.status = Payment.Status.FAILED
         payment.save(update_fields=["status"])
         return payment
 
+    # Genuine first-time confirmation. Decrement stock for each line item
+    # now — this is the point of sale for an online order. If stock ran out
+    # between order creation and payment (we validate but don't reserve),
+    # the payment still succeeds (the customer paid) but the order is
+    # flagged for manual resolution rather than silently over-selling.
+    order = payment.order
+    stock_ok = True
+    for item in order.items.select_related("variant").all():
+        try:
+            record_stock_movement(
+                variant=item.variant,
+                movement_type=StockMovement.MovementType.SALE,
+                quantity_change=-item.quantity,
+                reference=f"online order {order.public_reference}",
+            )
+        except InsufficientStockError:
+            stock_ok = False
+
     payment.status = Payment.Status.SUCCESS
     payment.verified_at = timezone.now()
     payment.save(update_fields=["status", "verified_at"])
 
-    Order.objects.filter(pk=payment.order_id).update(payment_status=Order.PaymentStatus.PAID)
+    Order.objects.filter(pk=order.pk).update(
+        payment_status=Order.PaymentStatus.PAID,
+        status=Order.Status.COMPLETED if stock_ok else Order.Status.NEEDS_ATTENTION,
+    )
     return payment

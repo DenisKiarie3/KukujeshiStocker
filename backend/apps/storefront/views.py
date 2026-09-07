@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.conf import settings
 
 from apps.orders.models import Order
 from apps.core.models import Store
@@ -13,6 +14,8 @@ from .serializers import (
 )
 from .services import create_storefront_order, StorefrontError
 from .throttles import StorefrontReadThrottle, StorefrontOrderThrottle
+from apps.payments.services import initiate_paystack_payment, PaymentNotAllowedError
+from apps.payments.gateway import PaystackError
 
 
 class StorefrontProductListView(generics.ListAPIView):
@@ -66,3 +69,30 @@ class StorefrontOrderStatusView(generics.RetrieveAPIView):
     serializer_class = StorefrontOrderStatusSerializer
     lookup_field = "public_reference"
     queryset = Order.objects.all()
+
+class StorefrontCheckoutView(APIView):
+    """
+    Starts Paystack checkout for an existing anonymous order, looked up by
+    its public_reference. Returns the hosted-checkout URL to redirect to.
+    Reuses the exact same initiate_paystack_payment flow as the
+    owner-facing pay-online action — no separate, weaker payment path.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [StorefrontOrderThrottle]
+
+    def post(self, request, public_reference):
+        order = get_object_or_404(Order, public_reference=public_reference)
+
+        email = request.data.get("email") or (order.customer.email if order.customer else None)
+        if not email:
+            return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        callback_url = f"{settings.FRONTEND_URL}/store/{order.store.slug}/checkout/callback"
+        try:
+            checkout_url = initiate_paystack_payment(order=order, email=email, callback_url=callback_url)
+        except PaymentNotAllowedError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except PaystackError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        return Response({"checkout_url": checkout_url}, status=status.HTTP_200_OK)
